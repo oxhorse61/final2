@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据采集系统</title>
+    <!-- 引入 Tailwind CSS 以便快速美化界面 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 自定义样式，使视频和画布元素居中且美观 */
+        .camera-view, .snapshot-canvas {
+            border-radius: 0.5rem;
+            border: 2px solid #e5e7eb;
+            background-color: #f9fafb;
+        }
+        .video-container {
+            position: relative;
+        }
+        .snapshot-canvas {
+            display: none; /* 默认隐藏画布 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+<div class="container mx-auto p-4 md:p-8 max-w-4xl bg-white rounded-xl shadow-lg">
+    <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">生理特征数据采集系统</h1>
+
+    <!-- 数据采集表单 -->
+    <form id="submissionForm" class="space-y-6">
+
+        <!-- 基础信息区域 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+                <label for="name" class="block text-sm font-medium text-gray-700">姓名</label>
+                <input type="text" id="name" name="name" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div>
+                <label for="age" class="block text-sm font-medium text-gray-700">年龄</label>
+                <input type="number" id="age" name="age" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div>
+                <label for="gender" class="block text-sm font-medium text-gray-700">性别</label>
+                <select id="gender" name="gender" required class="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="男">男</option>
+                    <option value="女">女</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- 图像采集区域 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- 面相采集 -->
+            <div class="space-y-4">
+                <h2 class="text-xl font-semibold text-gray-700 text-center">面相采集</h2>
+                <div class="video-container bg-gray-900 rounded-lg overflow-hidden aspect-video">
+                    <video id="faceVideo" class="camera-view w-full h-full" autoplay playsinline></video>
+                    <canvas id="faceCanvas" class="snapshot-canvas w-full h-full"></canvas>
+                </div>
+                <button type="button" id="captureFaceBtn" class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                    拍摄面相
+                </button>
+            </div>
+
+            <!-- 舌象采集 -->
+            <div class="space-y-4">
+                <h2 class="text-xl font-semibold text-gray-700 text-center">舌象采集</h2>
+                <div class="video-container bg-gray-900 rounded-lg overflow-hidden aspect-video">
+                    <video id="tongueVideo" class="camera-view w-full h-full" autoplay playsinline></video>
+                    <canvas id="tongueCanvas" class="snapshot-canvas w-full h-full"></canvas>
+                </div>
+                <button type="button" id="captureTongueBtn" class="w-full bg-pink-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500 transition duration-150 ease-in-out">
+                    拍摄舌象
+                </button>
+            </div>
+        </div>
+
+        <!-- 提交按钮 -->
+        <div>
+            <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-150 ease-in-out">
+                提交全部数据
+            </button>
+        </div>
+    </form>
+
+    <!-- 结果反馈区域 -->
+    <div id="resultMessage" class="mt-6 p-4 rounded-md text-center font-medium hidden"></div>
+
+</div>
+
+<script>
+    // 获取所有需要的 DOM 元素
+    const faceVideo = document.getElementById('faceVideo');
+    const faceCanvas = document.getElementById('faceCanvas');
+    const captureFaceBtn = document.getElementById('captureFaceBtn');
+    let faceBlob = null; // 用于存储面相图片数据
+
+    const tongueVideo = document.getElementById('tongueVideo');
+    const tongueCanvas = document.getElementById('tongueCanvas');
+    const captureTongueBtn = document.getElementById('captureTongueBtn');
+    let tongueBlob = null; // 用于存储舌象图片数据
+
+    const submissionForm = document.getElementById('submissionForm');
+    const resultMessage = document.getElementById('resultMessage');
+
+    // 统一的摄像头启动函数
+    async function startCamera(videoElement) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
+            videoElement.srcObject = stream;
+        } catch (err) {
+            console.error("摄像头访问出错: ", err);
+            alert("无法访问摄像头，请检查权限和设备。");
+        }
+    }
+
+    // 统一的拍照函数
+    function captureImage(videoElement, canvasElement, buttonElement) {
+        if (buttonElement.textContent.includes('拍摄')) {
+            const context = canvasElement.getContext('2d');
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+            context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+
+            // 显示画布，隐藏视频
+            canvasElement.style.display = 'block';
+            videoElement.style.display = 'none';
+
+            buttonElement.textContent = '重新拍摄';
+            buttonElement.classList.remove('bg-indigo-600', 'bg-pink-600');
+            buttonElement.classList.add('bg-gray-500');
+
+            // 返回一个 Promise，它会在画布内容转换为 Blob 后解析
+            return new Promise(resolve => {
+                canvasElement.toBlob(blob => {
+                    resolve(blob);
+                }, 'image/jpeg', 0.9);
+            });
+
+        } else {
+            // 显示视频，隐藏画布
+            videoElement.style.display = 'block';
+            canvasElement.style.display = 'none';
+            buttonElement.textContent = videoElement.id.includes('face') ? '拍摄面相' : '拍摄舌象';
+            if(videoElement.id.includes('face')) {
+                buttonElement.classList.remove('bg-gray-500');
+                buttonElement.classList.add('bg-indigo-600');
+            } else {
+                buttonElement.classList.remove('bg-gray-500');
+                buttonElement.classList.add('bg-pink-600');
+            }
+            return Promise.resolve(null); // 返回一个解析为 null 的 Promise
+        }
+    }
+
+    // 绑定拍照事件
+    captureFaceBtn.addEventListener('click', async () => {
+        faceBlob = await captureImage(faceVideo, faceCanvas, captureFaceBtn);
+    });
+
+    captureTongueBtn.addEventListener('click', async () => {
+        tongueBlob = await captureImage(tongueVideo, tongueCanvas, captureTongueBtn);
+    });
+
+
+    // 表单提交事件
+    submissionForm.addEventListener('submit', async function(event) {
+        event.preventDefault(); // 阻止表单默认的提交行为
+
+        // 检查是否已拍摄照片
+        if (!faceBlob || !tongueBlob) {
+            alert('请先完成面相和舌象的拍摄！');
+            return;
+        }
+
+        // 显示加载状态
+        resultMessage.textContent = '正在提交数据，请稍候...';
+        resultMessage.className = 'mt-6 p-4 rounded-md text-center font-medium bg-blue-100 text-blue-800';
+        resultMessage.classList.remove('hidden');
+
+        // 使用 FormData 来打包所有数据，包括文件
+        const formData = new FormData();
+        formData.append('name', document.getElementById('name').value);
+        formData.append('age', document.getElementById('age').value);
+        formData.append('gender', document.getElementById('gender').value);
+
+        // 将 Blob 转换为 File 对象再上传
+        formData.append('faceImage', new File([faceBlob], "face_image.jpg", { type: 'image/jpeg' }));
+        formData.append('tongueImage', new File([tongueBlob], "tongue_image.jpg", { type: 'image/jpeg' }));
+
+        console.log("即将发送的 FormData 内容：");
+        for(let [key, value] of formData.entries()) {
+            console.log(key, value);
+        }
+
+        try {
+            // 发送 POST 请求到后端的 API 接口
+            const response = await fetch('/api/data-submissions', {
+                method: 'POST',
+                body: formData, // 直接发送 FormData，不需要设置 Content-Type，浏览器会自动处理
+            });
+
+            const responseText = await response.text();
+
+            if (response.ok) {
+                // 请求成功
+                resultMessage.textContent = '成功: ' + responseText;
+                resultMessage.className = 'mt-6 p-4 rounded-md text-center font-medium bg-green-100 text-green-800';
+                submissionForm.reset(); // 成功后清空表单
+                // 重置拍照状态
+                captureImage(faceVideo, faceCanvas, captureFaceBtn);
+                captureImage(tongueVideo, tongueCanvas, captureTongueBtn);
+                faceBlob = null;
+                tongueBlob = null;
+            } else {
+                // 请求失败
+                resultMessage.textContent = '失败: ' + responseText;
+                resultMessage.className = 'mt-6 p-4 rounded-md text-center font-medium bg-red-100 text-red-800';
+            }
+
+        } catch (error) {
+            // 网络或其他 fetch 错误
+            console.error('提交时发生网络错误:', error);
+            resultMessage.textContent = '提交失败：网络错误，请检查后端服务是否开启，或查看浏览器控制台。';
+            resultMessage.className = 'mt-6 p-4 rounded-md text-center font-medium bg-red-100 text-red-800';
+        } finally {
+            resultMessage.classList.remove('hidden');
+        }
+    });
+
+    // 页面加载时启动两个摄像头
+    startCamera(faceVideo);
+    startCamera(tongueVideo);
+</script>
+</body>
+</html>
