@@ -4,232 +4,365 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>数据采集系统</title>
-    <!-- 引入 Tailwind CSS 以便快速美化界面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 自定义样式，使视频和画布元素居中且美观 */
-        .camera-view, .snapshot-canvas {
+        .camera-view, .snapshot-canvas { border-radius: 0.5rem; border: 2px solid #e5e7eb; background-color: #f9fafb; }
+        .video-container { position: relative; background-color: #111827; border-radius: 0.5rem; overflow: hidden; aspect-ratio: 16 / 9; }
+        .snapshot-canvas { display: none; }
+        .page { display: none; }
+        .page.active { display: block; }
+        /* AI分析时的遮罩层样式 */
+        .analysis-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            font-weight: 500;
             border-radius: 0.5rem;
-            border: 2px solid #e5e7eb;
-            background-color: #f9fafb;
-        }
-        .video-container {
-            position: relative;
-        }
-        .snapshot-canvas {
-            display: none; /* 默认隐藏画布 */
+            z-index: 10;
         }
     </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
-<div class="container mx-auto p-4 md:p-8 max-w-4xl bg-white rounded-xl shadow-lg">
-    <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">生理特征数据采集系统</h1>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+<div class="container mx-auto max-w-2xl bg-white rounded-xl shadow-lg">
+    <div id="main-content" class="p-6 md:p-8">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">生理特征数据采集系统</h1>
+        <div id="globalMessage" class="mb-6 p-4 rounded-md text-center font-medium hidden"></div>
 
-    <!-- 数据采集表单 -->
-    <form id="submissionForm" class="space-y-6">
-
-        <!-- 基础信息区域 -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-                <label for="name" class="block text-sm font-medium text-gray-700">姓名</label>
-                <input type="text" id="name" name="name" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-            </div>
-            <div>
-                <label for="age" class="block text-sm font-medium text-gray-700">年龄</label>
-                <input type="number" id="age" name="age" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-            </div>
-            <div>
-                <label for="gender" class="block text-sm font-medium text-gray-700">性别</label>
-                <select id="gender" name="gender" required class="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                    <option value="男">男</option>
-                    <option value="女">女</option>
-                </select>
-            </div>
+        <!-- 认证页面容器 -->
+        <div id="authPage" class="page">
+            <!-- 登录表单 -->
+            <form id="loginForm" class="space-y-6">
+                <h2 class="text-2xl font-semibold text-center text-gray-700">用户登录</h2>
+                <div><label for="loginUsername" class="block text-sm font-medium text-gray-700">用户名</label><input type="text" id="loginUsername" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></div>
+                <div><label for="loginPassword" class="block text-sm font-medium text-gray-700">密码</label><input type="password" id="loginPassword" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></div>
+                <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700">登录</button>
+                <p class="text-center text-sm text-gray-600">还没有账户? <a href="#" id="showRegisterLink" class="font-medium text-indigo-600 hover:text-indigo-500">立即注册</a></p>
+            </form>
+            <!-- 注册表单 (默认隐藏) -->
+            <form id="registerForm" class="space-y-6 hidden">
+                <h2 class="text-2xl font-semibold text-center text-gray-700">新用户注册</h2>
+                <div><label for="registerUsername" class="block text-sm font-medium text-gray-700">用户名</label><input type="text" id="registerUsername" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></div>
+                <div><label for="registerPassword" class="block text-sm font-medium text-gray-700">密码</label><input type="password" id="registerPassword" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></div>
+                <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white bg-green-600 hover:bg-green-700">注册</button>
+                <p class="text-center text-sm text-gray-600">已有账户? <a href="#" id="showLoginLink" class="font-medium text-indigo-600 hover:text-indigo-500">返回登录</a></p>
+            </form>
         </div>
 
-        <!-- 图像采集区域 -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <!-- 面相采集 -->
-            <div class="space-y-4">
-                <h2 class="text-xl font-semibold text-gray-700 text-center">面相采集</h2>
-                <div class="video-container bg-gray-900 rounded-lg overflow-hidden aspect-video">
-                    <video id="faceVideo" class="camera-view w-full h-full" autoplay playsinline></video>
-                    <canvas id="faceCanvas" class="snapshot-canvas w-full h-full"></canvas>
+        <!-- 数据采集与查询页面 -->
+        <div id="submissionPage" class="page">
+            <div class="flex justify-between items-center mb-4 border-b pb-4">
+                <span id="welcomeUser" class="font-medium text-gray-700 text-lg"></span>
+                <div>
+                    <button id="viewMyDataBtn" class="text-sm bg-blue-500 text-white font-semibold py-1 px-3 rounded-md hover:bg-blue-600 mr-2">查询我的数据</button>
+                    <button id="logoutBtn" class="text-sm bg-red-500 text-white font-semibold py-1 px-3 rounded-md hover:bg-red-600">退出登录</button>
                 </div>
-                <button type="button" id="captureFaceBtn" class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
-                    拍摄面相
-                </button>
             </div>
-
-            <!-- 舌象采集 -->
-            <div class="space-y-4">
-                <h2 class="text-xl font-semibold text-gray-700 text-center">舌象采集</h2>
-                <div class="video-container bg-gray-900 rounded-lg overflow-hidden aspect-video">
-                    <video id="tongueVideo" class="camera-view w-full h-full" autoplay playsinline></video>
-                    <canvas id="tongueCanvas" class="snapshot-canvas w-full h-full"></canvas>
+            <form id="submissionForm" class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border rounded-lg bg-gray-50">
+                    <div><label for="age" class="block text-sm font-medium text-gray-700">年龄</label><input type="number" id="age" name="age" min="1" max="120" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></div>
+                    <div><label for="gender" class="block text-sm font-medium text-gray-700">性别</label><select id="gender" name="gender" required class="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm"><option value="男">男</option><option value="女">女</option></select></div>
+                    <div><label for="height" class="block text-sm font-medium text-gray-700">身高 (cm)</label><input type="number" id="height" name="height" step="0.1" min="50" max="250" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></div>
+                    <div><label for="weight" class="block text-sm font-medium text-gray-700">体重 (kg)</label><input type="number" id="weight" name="weight" step="0.1" min="10" max="300" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></div>
                 </div>
-                <button type="button" id="captureTongueBtn" class="w-full bg-pink-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500 transition duration-150 ease-in-out">
-                    拍摄舌象
-                </button>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
+                    <!-- 面相采集 -->
+                    <div class="space-y-2">
+                        <h2 class="text-xl font-semibold text-gray-700 text-center">面相采集</h2>
+                        <div id="face-container" class="video-container"><video id="faceVideo" class="camera-view w-full h-full" autoplay playsinline></video><canvas id="faceCanvas" class="snapshot-canvas w-full h-full"></canvas></div>
+                        <button type="button" id="captureFaceBtn" class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700">拍摄面相</button>
+                        <div id="faceAnalysisResult" class="text-center font-medium h-5"></div>
+                    </div>
+                    <!-- 舌象采集 -->
+                    <div class="space-y-2">
+                        <h2 class="text-xl font-semibold text-gray-700 text-center">舌象采集</h2>
+                        <div id="tongue-container" class="video-container"><video id="tongueVideo" class="camera-view w-full h-full" autoplay playsinline></video><canvas id="tongueCanvas" class="snapshot-canvas w-full h-full"></canvas></div>
+                        <button type="button" id="captureTongueBtn" class="w-full bg-pink-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-pink-700">拍摄舌象</button>
+                        <div id="tongueAnalysisResult" class="text-center font-medium h-5"></div>
+                    </div>
+                </div>
+                <div><button type="submit" id="submitBtn" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-bold text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400" disabled>提交生理数据</button></div>
+            </form>
+            <div id="dataDisplaySection" class="mt-8 hidden">
+                <h2 class="text-2xl font-semibold text-center text-gray-700 mb-4">我的提交记录</h2>
+                <div class="max-h-96 overflow-y-auto pr-2"><ul id="submissionList" class="space-y-4"></ul></div>
             </div>
         </div>
-
-        <!-- 提交按钮 -->
-        <div>
-            <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-150 ease-in-out">
-                提交全部数据
-            </button>
-        </div>
-    </form>
-
-    <!-- 结果反馈区域 -->
-    <div id="resultMessage" class="mt-6 p-4 rounded-md text-center font-medium hidden"></div>
-
+    </div>
 </div>
 
 <script>
-    // 获取所有需要的 DOM 元素
-    const faceVideo = document.getElementById('faceVideo');
-    const faceCanvas = document.getElementById('faceCanvas');
-    const captureFaceBtn = document.getElementById('captureFaceBtn');
-    let faceBlob = null; // 用于存储面相图片数据
+    document.addEventListener('DOMContentLoaded', () => {
+        const getEl = (id) => document.getElementById(id);
+        const pages = { auth: getEl('authPage'), submission: getEl('submissionPage') };
+        const forms = { login: getEl('loginForm'), register: getEl('registerForm'), submission: getEl('submissionForm') };
+        const links = { toRegister: getEl('showRegisterLink'), toLogin: getEl('showLoginLink') };
+        const welcomeUser = getEl('welcomeUser'), logoutBtn = getEl('logoutBtn'), viewMyDataBtn = getEl('viewMyDataBtn');
+        const dataDisplaySection = getEl('dataDisplaySection'), submissionList = getEl('submissionList');
+        const globalMessage = getEl('globalMessage');
+        const submitBtn = getEl('submitBtn');
 
-    const tongueVideo = document.getElementById('tongueVideo');
-    const tongueCanvas = document.getElementById('tongueCanvas');
-    const captureTongueBtn = document.getElementById('captureTongueBtn');
-    let tongueBlob = null; // 用于存储舌象图片数据
+        const cameraModules = {
+            face: { video: getEl('faceVideo'), canvas: getEl('faceCanvas'), button: getEl('captureFaceBtn'), blob: null, approved: false, resultEl: getEl('faceAnalysisResult'), container: getEl('face-container') },
+            tongue: { video: getEl('tongueVideo'), canvas: getEl('tongueCanvas'), button: getEl('captureTongueBtn'), blob: null, approved: false, resultEl: getEl('tongueAnalysisResult'), container: getEl('tongue-container') }
+        };
 
-    const submissionForm = document.getElementById('submissionForm');
-    const resultMessage = document.getElementById('resultMessage');
+        const showPage = (pageKey) => {
+            Object.values(pages).forEach(p => { p.style.display = 'none'; });
+            const pageToShow = pages[pageKey];
+            if (pageToShow) { pageToShow.style.display = 'block'; }
+            globalMessage.classList.add('hidden');
+        };
 
-    // 统一的摄像头启动函数
-    async function startCamera(videoElement) {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
-            videoElement.srcObject = stream;
-        } catch (err) {
-            console.error("摄像头访问出错: ", err);
-            alert("无法访问摄像头，请检查权限和设备。");
-        }
-    }
+        const showAuthForm = (formKey) => {
+            forms.login.style.display = 'none';
+            forms.register.style.display = 'none';
+            forms[formKey].style.display = 'block';
+        };
 
-    // 统一的拍照函数
-    function captureImage(videoElement, canvasElement, buttonElement) {
-        if (buttonElement.textContent.includes('拍摄')) {
-            const context = canvasElement.getContext('2d');
-            canvasElement.width = videoElement.videoWidth;
-            canvasElement.height = videoElement.videoHeight;
-            context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+        links.toRegister.addEventListener('click', (e) => { e.preventDefault(); showAuthForm('register'); });
+        links.toLogin.addEventListener('click', (e) => { e.preventDefault(); showAuthForm('login'); });
 
-            // 显示画布，隐藏视频
-            canvasElement.style.display = 'block';
-            videoElement.style.display = 'none';
+        const showMessage = (text, isError = false) => {
+            globalMessage.textContent = text;
+            globalMessage.className = `mb-6 p-4 rounded-md text-center font-medium ${isError ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`;
+            globalMessage.classList.remove('hidden');
+        };
 
-            buttonElement.textContent = '重新拍摄';
-            buttonElement.classList.remove('bg-indigo-600', 'bg-pink-600');
-            buttonElement.classList.add('bg-gray-500');
-
-            // 返回一个 Promise，它会在画布内容转换为 Blob 后解析
-            return new Promise(resolve => {
-                canvasElement.toBlob(blob => {
-                    resolve(blob);
-                }, 'image/jpeg', 0.9);
-            });
-
-        } else {
-            // 显示视频，隐藏画布
-            videoElement.style.display = 'block';
-            canvasElement.style.display = 'none';
-            buttonElement.textContent = videoElement.id.includes('face') ? '拍摄面相' : '拍摄舌象';
-            if(videoElement.id.includes('face')) {
-                buttonElement.classList.remove('bg-gray-500');
-                buttonElement.classList.add('bg-indigo-600');
-            } else {
-                buttonElement.classList.remove('bg-gray-500');
-                buttonElement.classList.add('bg-pink-600');
+        const apiCall = async (endpoint, options) => {
+            try {
+                const response = await fetch(endpoint, options);
+                const isJson = response.headers.get('content-type')?.includes('application/json');
+                const data = isJson ? await response.json() : await response.text();
+                if (!response.ok) {
+                    const errorMsg = typeof data === 'object' ? (data.message || JSON.stringify(data)) : data;
+                    throw new Error(errorMsg || '请求失败');
+                }
+                return data;
+            } catch (error) {
+                showMessage(error.message || '网络或服务器错误。', true);
+                throw error;
             }
-            return Promise.resolve(null); // 返回一个解析为 null 的 Promise
-        }
-    }
+        };
 
-    // 绑定拍照事件
-    captureFaceBtn.addEventListener('click', async () => {
-        faceBlob = await captureImage(faceVideo, faceCanvas, captureFaceBtn);
-    });
+        forms.register.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = getEl('registerUsername').value;
+            const password = getEl('registerPassword').value;
+            try {
+                await apiCall('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
+                showMessage('注册成功！请登录。');
+                showAuthForm('login');
+            } catch (error) { /* handled in apiCall */ }
+        });
 
-    captureTongueBtn.addEventListener('click', async () => {
-        tongueBlob = await captureImage(tongueVideo, tongueCanvas, captureTongueBtn);
-    });
+        forms.login.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = getEl('loginUsername').value;
+            const password = getEl('loginPassword').value;
+            try {
+                const data = await apiCall('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
+                localStorage.setItem('jwtToken', data.token);
+                localStorage.setItem('username', username);
+                setupSubmissionPage(username);
+            } catch (error) { /* handled in apiCall */ }
+        });
 
+        logoutBtn.addEventListener('click', () => {
+            localStorage.clear();
+            Object.values(cameraModules).forEach(cam => stopCamera(cam.video));
+            showPage('auth');
+            showAuthForm('login');
+        });
 
-    // 表单提交事件
-    submissionForm.addEventListener('submit', async function(event) {
-        event.preventDefault(); // 阻止表单默认的提交行为
-
-        // 检查是否已拍摄照片
-        if (!faceBlob || !tongueBlob) {
-            alert('请先完成面相和舌象的拍摄！');
-            return;
-        }
-
-        // 显示加载状态
-        resultMessage.textContent = '正在提交数据，请稍候...';
-        resultMessage.className = 'mt-6 p-4 rounded-md text-center font-medium bg-blue-100 text-blue-800';
-        resultMessage.classList.remove('hidden');
-
-        // 使用 FormData 来打包所有数据，包括文件
-        const formData = new FormData();
-        formData.append('name', document.getElementById('name').value);
-        formData.append('age', document.getElementById('age').value);
-        formData.append('gender', document.getElementById('gender').value);
-
-        // 将 Blob 转换为 File 对象再上传
-        formData.append('faceImage', new File([faceBlob], "face_image.jpg", { type: 'image/jpeg' }));
-        formData.append('tongueImage', new File([tongueBlob], "tongue_image.jpg", { type: 'image/jpeg' }));
-
-        console.log("即将发送的 FormData 内容：");
-        for(let [key, value] of formData.entries()) {
-            console.log(key, value);
+        function setupSubmissionPage(username) {
+            welcomeUser.textContent = `欢迎, ${username}!`;
+            Object.values(cameraModules).forEach(cam => startCamera(cam.video));
+            showPage('submission');
         }
 
-        try {
-            // 发送 POST 请求到后端的 API 接口
-            const response = await fetch('/api/data-submissions', {
-                method: 'POST',
-                body: formData, // 直接发送 FormData，不需要设置 Content-Type，浏览器会自动处理
-            });
+        forms.submission.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            if (submitBtn.disabled) return;
+            const token = localStorage.getItem('jwtToken');
+            if (!token) { showPage('auth'); return; }
 
-            const responseText = await response.text();
-
-            if (response.ok) {
-                // 请求成功
-                resultMessage.textContent = '成功: ' + responseText;
-                resultMessage.className = 'mt-6 p-4 rounded-md text-center font-medium bg-green-100 text-green-800';
-                submissionForm.reset(); // 成功后清空表单
-                // 重置拍照状态
-                captureImage(faceVideo, faceCanvas, captureFaceBtn);
-                captureImage(tongueVideo, tongueCanvas, captureTongueBtn);
-                faceBlob = null;
-                tongueBlob = null;
-            } else {
-                // 请求失败
-                resultMessage.textContent = '失败: ' + responseText;
-                resultMessage.className = 'mt-6 p-4 rounded-md text-center font-medium bg-red-100 text-red-800';
+            const ageInput = getEl('age'), heightInput = getEl('height'), weightInput = getEl('weight');
+            if (!ageInput.checkValidity() || !heightInput.checkValidity() || !weightInput.checkValidity()) {
+                alert('请输入有效范围内的年龄、身高和体重。'); return;
             }
 
-        } catch (error) {
-            // 网络或其他 fetch 错误
-            console.error('提交时发生网络错误:', error);
-            resultMessage.textContent = '提交失败：网络错误，请检查后端服务是否开启，或查看浏览器控制台。';
-            resultMessage.className = 'mt-6 p-4 rounded-md text-center font-medium bg-red-100 text-red-800';
-        } finally {
-            resultMessage.classList.remove('hidden');
-        }
-    });
+            showMessage('正在提交数据...');
+            const formData = new FormData();
+            formData.append('name', localStorage.getItem('username'));
+            formData.append('age', ageInput.value);
+            formData.append('gender', getEl('gender').value);
+            formData.append('height', heightInput.value);
+            formData.append('weight', weightInput.value);
+            formData.append('faceImage', new File([cameraModules.face.blob], "face_image.jpg", { type: 'image/jpeg' }));
+            formData.append('tongueImage', new File([cameraModules.tongue.blob], "tongue_image.jpg", { type: 'image/jpeg' }));
 
-    // 页面加载时启动两个摄像头
-    startCamera(faceVideo);
-    startCamera(tongueVideo);
+            try {
+                const responseText = await apiCall('/api/data-submissions', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: formData });
+                showMessage(responseText);
+                if (responseText === '数据保存成功') {
+                    forms.submission.reset();
+                    Object.values(cameraModules).forEach(cam => {
+                        resetCapture(cam);
+                    });
+                }
+            } catch (error) { /* handled in apiCall */ }
+        });
+
+        viewMyDataBtn.addEventListener('click', async () => {
+            const token = localStorage.getItem('jwtToken');
+            if (!token) { showPage('auth'); return; }
+            const isHidden = dataDisplaySection.classList.toggle('hidden');
+            viewMyDataBtn.textContent = isHidden ? '查询我的数据' : '隐藏提交记录';
+            if (isHidden) return;
+
+            submissionList.innerHTML = '<li>正在查询数据...</li>';
+            try {
+                const data = await apiCall('/api/data-submissions', { headers: { 'Authorization': 'Bearer ' + token }});
+                submissionList.innerHTML = '';
+                if (data.length === 0) {
+                    submissionList.innerHTML = '<li>您还没有任何提交记录。</li>';
+                } else {
+                    data.sort((a, b) => new Date(b.submissionTime) - new Date(a.submissionTime));
+                    data.forEach(item => {
+                        const li = document.createElement('li');
+                        li.className = 'p-4 border rounded-md bg-gray-50';
+                        li.innerHTML = `
+                            <p><strong>提交时间:</strong> ${new Date(item.submissionTime).toLocaleString()}</p>
+                            <p><strong>姓名:</strong> ${item.name}, <strong>年龄:</strong> ${item.age}, <strong>性别:</strong> ${item.gender}</p>
+                            <p><strong>身高:</strong> ${item.height || 'N/A'} cm, <strong>体重:</strong> ${item.weight || 'N/A'} kg</p>
+                            <p>
+                                <a href="${item.faceImageUrl}" target="_blank" class="text-indigo-600 hover:underline">查看面相图片</a> |
+                                <a href="${item.tongueImageUrl}" target="_blank" class="text-pink-600 hover:underline">查看舌象图片</a>
+                            </p>
+                        `;
+                        submissionList.appendChild(li);
+                    });
+                }
+            } catch (error) { submissionList.innerHTML = `<li>查询失败: ${error.message}</li>`; }
+        });
+
+        async function analyzeImageWithAI(blob, imageType) {
+            const module = cameraModules[imageType];
+            const resultEl = module.resultEl;
+            const overlay = document.createElement('div');
+            overlay.className = 'analysis-overlay';
+            overlay.textContent = 'AI 图像质检中...';
+            module.container.appendChild(overlay);
+            resultEl.textContent = '分析中...';
+            resultEl.className = 'text-center font-medium text-gray-500';
+
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(blob);
+                reader.onloadend = async () => {
+                    const base64Data = reader.result.split(',')[1];
+                    const prompt = imageType === 'tongue' ? "你是一位专业的中医舌象质检员。请判断这张图片是否是一张清晰、光照良好、能完整看到舌体的舌象图片，适合用于诊断。请以JSON格式返回结果，包含布尔值字段: isTongue, isClear, goodLighting, isComplete, 以及一个中文的 reason 字符串说明不合格的原因。" : "你是一位专业的人脸识别系统质检员。请判断这张图片是否是一张清晰、光照均匀、五官无遮挡的正面人脸照片。请以JSON格式返回结果，包含布尔值字段: isFace, isClear, goodLighting, noObstruction, 以及一个中文的 reason 字符串说明不合格的原因。";
+                    const payload = { contents: [{ parts: [{ "text": prompt }, { "inline_data": { "mime_type": "image/jpeg", "data": base64Data } }] }], generationConfig: { "response_mime_type": "application/json" } };
+
+                    try {
+                        const apiKey = "AIzaSyCYTAXrqUBWjVSgQ9YyMGzhDbIGt4QHkg0"; // <-- 在这里粘贴您的API密钥
+                        if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY_HERE") {
+                            throw new Error("请在代码中配置您的 Gemini API 密钥。");
+                        }
+                        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                        const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                        if (!response.ok) throw new Error(`AI服务器错误: ${response.statusText}`);
+                        const result = await response.json();
+                        const analysisJson = JSON.parse(result.candidates[0].content.parts[0].text);
+
+                        let isApproved = imageType === 'tongue' ? (analysisJson.isTongue && analysisJson.isClear && analysisJson.goodLighting && analysisJson.isComplete) : (analysisJson.isFace && analysisJson.isClear && analysisJson.goodLighting && analysisJson.noObstruction);
+
+                        if (isApproved) {
+                            resultEl.textContent = '✓ 图像质量合格';
+                            resultEl.className = 'text-center font-medium text-green-600';
+                            resolve({ success: true });
+                        } else {
+                            resultEl.textContent = `✗ 不合格: ${analysisJson.reason || "未知原因"}`;
+                            resultEl.className = 'text-center font-medium text-red-600';
+                            resolve({ success: false });
+                        }
+                    } catch (error) {
+                        console.error("AI分析失败:", error);
+                        resultEl.textContent = `✗ AI分析失败: ${error.message}`;
+                        resultEl.className = 'text-center font-medium text-red-600';
+                        resolve({ success: false });
+                    } finally {
+                        if (module.container.contains(overlay)) {
+                            module.container.removeChild(overlay);
+                        }
+                    }
+                };
+            });
+        }
+
+        async function startCamera(video) {
+            if (video.srcObject) return;
+            try { video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false }); } catch (err) { alert("无法访问摄像头。"); }
+        }
+        function stopCamera(video) {
+            video.srcObject?.getTracks().forEach(t => t.stop());
+            video.srcObject = null;
+        }
+
+        function resetCapture(module) {
+            module.video.style.display = 'block';
+            module.canvas.style.display = 'none';
+            module.button.textContent = `拍摄${module.video.id.includes('face') ? '面相' : '舌象'}`;
+            module.button.classList.remove('bg-gray-500');
+            module.button.classList.add(module.video.id.includes('face') ? 'bg-indigo-600' : 'bg-pink-600');
+            if(module.resultEl) module.resultEl.textContent = '';
+            module.blob = null;
+            module.approved = false;
+            checkIfReadyToSubmit();
+        }
+
+        async function handleCapture(imageType) {
+            const module = cameraModules[imageType];
+            if (module.button.textContent.includes('重新拍摄')) {
+                resetCapture(module);
+                return;
+            }
+            const canvas = module.canvas;
+            const video = module.video;
+            const button = module.button;
+            const ctx = canvas.getContext('2d');
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            canvas.style.display = 'block'; video.style.display = 'none';
+            button.textContent = '重新拍摄';
+            button.classList.remove('bg-indigo-600', 'bg-pink-600'); button.classList.add('bg-gray-500');
+
+            const blob = await new Promise(resolve => canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.9));
+            if (blob) {
+                const analysisResult = await analyzeImageWithAI(blob, imageType);
+                module.blob = analysisResult.success ? blob : null;
+                module.approved = analysisResult.success;
+            }
+            checkIfReadyToSubmit();
+        }
+
+        function checkIfReadyToSubmit() {
+            submitBtn.disabled = !(cameraModules.face.approved && cameraModules.tongue.approved);
+        }
+
+        cameraModules.face.button.addEventListener('click', () => handleCapture('face'));
+        cameraModules.tongue.button.addEventListener('click', () => handleCapture('tongue'));
+
+        const token = localStorage.getItem('jwtToken');
+        const username = localStorage.getItem('username');
+        if (token && username) { setupSubmissionPage(username); }
+        else { showPage('auth'); showAuthForm('login'); }
+    });
 </script>
 </body>
 </html>
