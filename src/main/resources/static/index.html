@@ -8,23 +8,21 @@
     <style>
         .camera-view, .snapshot-canvas { border-radius: 0.5rem; border: 2px solid #e5e7eb; background-color: #f9fafb; }
         .video-container { position: relative; background-color: #111827; border-radius: 0.5rem; overflow: hidden; aspect-ratio: 16 / 9; }
-        .snapshot-canvas { display: none; }
+        .snapshot-canvas, .capture-area { display: none; }
         .page { display: none; }
         .page.active { display: block; }
-        /* AI分析时的遮罩层样式 */
         .analysis-overlay {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1rem;
-            font-weight: 500;
-            border-radius: 0.5rem;
-            z-index: 10;
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7); color: white;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1rem; font-weight: 500;
+            border-radius: 0.5rem; z-index: 10;
         }
+        .zoom-slider { -webkit-appearance: none; width: 100%; height: 8px; background: #d1d5db; outline: none; border-radius: 4px; opacity: 0.7; transition: opacity .2s; }
+        .zoom-slider:hover { opacity: 1; }
+        .zoom-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; background: #4f46e5; cursor: pointer; border-radius: 50%; }
+        .zoom-slider::-moz-range-thumb { width: 20px; height: 20px; background: #4f46e5; cursor: pointer; border-radius: 50%; }
+        .scalable-video { transition: transform 0.2s ease-in-out; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
@@ -70,18 +68,24 @@
                     <div><label for="weight" class="block text-sm font-medium text-gray-700">体重 (kg)</label><input type="number" id="weight" name="weight" step="0.1" min="10" max="300" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
-                    <!-- 面相采集 -->
                     <div class="space-y-2">
                         <h2 class="text-xl font-semibold text-gray-700 text-center">面相采集</h2>
-                        <div id="face-container" class="video-container"><video id="faceVideo" class="camera-view w-full h-full" autoplay playsinline></video><canvas id="faceCanvas" class="snapshot-canvas w-full h-full"></canvas></div>
-                        <button type="button" id="captureFaceBtn" class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700">拍摄面相</button>
+                        <div id="face-initial" class="flex justify-center items-center h-48 border-2 border-dashed rounded-lg"><button type="button" id="startFaceBtn" class="bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-indigo-700">开始拍摄面相</button></div>
+                        <div id="face-capture-area" class="capture-area">
+                            <div id="face-container" class="video-container"><video id="faceVideo" class="scalable-video" autoplay playsinline></video><canvas id="faceCanvas" class="snapshot-canvas w-full h-full"></canvas></div>
+                            <div class="mt-2"><input type="range" id="faceZoom" min="1" max="3" step="0.1" value="1" class="zoom-slider"></div>
+                            <button type="button" id="captureFaceBtn" class="mt-2 w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700">拍摄</button>
+                        </div>
                         <div id="faceAnalysisResult" class="text-center font-medium h-5"></div>
                     </div>
-                    <!-- 舌象采集 -->
                     <div class="space-y-2">
                         <h2 class="text-xl font-semibold text-gray-700 text-center">舌象采集</h2>
-                        <div id="tongue-container" class="video-container"><video id="tongueVideo" class="camera-view w-full h-full" autoplay playsinline></video><canvas id="tongueCanvas" class="snapshot-canvas w-full h-full"></canvas></div>
-                        <button type="button" id="captureTongueBtn" class="w-full bg-pink-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-pink-700">拍摄舌象</button>
+                        <div id="tongue-initial" class="flex justify-center items-center h-48 border-2 border-dashed rounded-lg"><button type="button" id="startTongueBtn" class="bg-pink-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-pink-700">开始拍摄舌象</button></div>
+                        <div id="tongue-capture-area" class="capture-area">
+                            <div id="tongue-container" class="video-container"><video id="tongueVideo" class="scalable-video" autoplay playsinline></video><canvas id="tongueCanvas" class="snapshot-canvas w-full h-full"></canvas></div>
+                            <div class="mt-2"><input type="range" id="tongueZoom" min="1" max="3" step="0.1" value="1" class="zoom-slider"></div>
+                            <button type="button" id="captureTongueBtn" class="mt-2 w-full bg-pink-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-pink-700">拍摄</button>
+                        </div>
                         <div id="tongueAnalysisResult" class="text-center font-medium h-5"></div>
                     </div>
                 </div>
@@ -97,6 +101,7 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
+        // --- 元素获取 ---
         const getEl = (id) => document.getElementById(id);
         const pages = { auth: getEl('authPage'), submission: getEl('submissionPage') };
         const forms = { login: getEl('loginForm'), register: getEl('registerForm'), submission: getEl('submissionForm') };
@@ -107,10 +112,11 @@
         const submitBtn = getEl('submitBtn');
 
         const cameraModules = {
-            face: { video: getEl('faceVideo'), canvas: getEl('faceCanvas'), button: getEl('captureFaceBtn'), blob: null, approved: false, resultEl: getEl('faceAnalysisResult'), container: getEl('face-container') },
-            tongue: { video: getEl('tongueVideo'), canvas: getEl('tongueCanvas'), button: getEl('captureTongueBtn'), blob: null, approved: false, resultEl: getEl('tongueAnalysisResult'), container: getEl('tongue-container') }
+            face: { video: getEl('faceVideo'), canvas: getEl('faceCanvas'), button: getEl('captureFaceBtn'), blob: null, approved: false, resultEl: getEl('faceAnalysisResult'), container: getEl('face-container'), initialView: getEl('face-initial'), captureArea: getEl('face-capture-area'), startBtn: getEl('startFaceBtn'), zoomSlider: getEl('faceZoom') },
+            tongue: { video: getEl('tongueVideo'), canvas: getEl('tongueCanvas'), button: getEl('captureTongueBtn'), blob: null, approved: false, resultEl: getEl('tongueAnalysisResult'), container: getEl('tongue-container'), initialView: getEl('tongue-initial'), captureArea: getEl('tongue-capture-area'), startBtn: getEl('startTongueBtn'), zoomSlider: getEl('tongueZoom') }
         };
 
+        // --- 页面和消息逻辑 ---
         const showPage = (pageKey) => {
             Object.values(pages).forEach(p => { p.style.display = 'none'; });
             const pageToShow = pages[pageKey];
@@ -149,6 +155,7 @@
             }
         };
 
+        // --- 认证逻辑 ---
         forms.register.addEventListener('submit', async (e) => {
             e.preventDefault();
             const username = getEl('registerUsername').value;
@@ -174,15 +181,31 @@
 
         logoutBtn.addEventListener('click', () => {
             localStorage.clear();
-            Object.values(cameraModules).forEach(cam => stopCamera(cam.video));
+            Object.values(cameraModules).forEach(cam => {
+                stopCamera(cam.video);
+                cam.initialView.style.display = 'flex';
+                cam.captureArea.style.display = 'none';
+                resetCapture(cam);
+            });
             showPage('auth');
             showAuthForm('login');
         });
 
+        // --- 数据采集页设置与逻辑 ---
         function setupSubmissionPage(username) {
             welcomeUser.textContent = `欢迎, ${username}!`;
-            Object.values(cameraModules).forEach(cam => startCamera(cam.video));
             showPage('submission');
+        }
+
+        function resetPageAfterSubmission() {
+            forms.submission.reset();
+            Object.values(cameraModules).forEach(cam => {
+                stopCamera(cam.video);
+                resetCapture(cam);
+                cam.initialView.style.display = 'flex';
+                cam.captureArea.style.display = 'none';
+            });
+            checkIfReadyToSubmit();
         }
 
         forms.submission.addEventListener('submit', async function(event) {
@@ -210,10 +233,7 @@
                 const responseText = await apiCall('/api/data-submissions', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: formData });
                 showMessage(responseText);
                 if (responseText === '数据保存成功') {
-                    forms.submission.reset();
-                    Object.values(cameraModules).forEach(cam => {
-                        resetCapture(cam);
-                    });
+                    resetPageAfterSubmission();
                 }
             } catch (error) { /* handled in apiCall */ }
         });
@@ -251,9 +271,11 @@
             } catch (error) { submissionList.innerHTML = `<li>查询失败: ${error.message}</li>`; }
         });
 
+        // --- AI 分析逻辑 (恢复为 Gemini) ---
         async function analyzeImageWithAI(blob, imageType) {
             const module = cameraModules[imageType];
             const resultEl = module.resultEl;
+
             const overlay = document.createElement('div');
             overlay.className = 'analysis-overlay';
             overlay.textContent = 'AI 图像质检中...';
@@ -265,18 +287,37 @@
                 const reader = new FileReader();
                 reader.readAsDataURL(blob);
                 reader.onloadend = async () => {
-                    const base64Data = reader.result.split(',')[1];
-                    const prompt = imageType === 'tongue' ? "你是一位专业的中医舌象质检员。请判断这张图片是否是一张清晰、光照良好、能完整看到舌体的舌象图片，适合用于诊断。请以JSON格式返回结果，包含布尔值字段: isTongue, isClear, goodLighting, isComplete, 以及一个中文的 reason 字符串说明不合格的原因。" : "你是一位专业的人脸识别系统质检员。请判断这张图片是否是一张清晰、光照均匀、五官无遮挡的正面人脸照片。请以JSON格式返回结果，包含布尔值字段: isFace, isClear, goodLighting, noObstruction, 以及一个中文的 reason 字符串说明不合格的原因。";
-                    const payload = { contents: [{ parts: [{ "text": prompt }, { "inline_data": { "mime_type": "image/jpeg", "data": base64Data } }] }], generationConfig: { "response_mime_type": "application/json" } };
+                    const base64Data = reader.result.split(',')[1]; // Gemini 需要不带前缀的 base64
+
+                    const prompt = imageType === 'tongue' ?
+                        "你是一位专业的中医舌象质检员。请判断这张图片是否是一张清晰、光照良好、能完整看到舌体的舌象图片，适合用于诊断。如果光照条件不佳但核心舌体依然清晰可见，请将'goodLighting'设为true。请以JSON格式返回结果，包含布尔值字段: isTongue, isClear, goodLighting, isComplete, 以及一个中文的 reason 字符串说明不合格的主要原因。" :
+                        "你是一位专业的人脸识别系统质检员。请判断这张图片是否是一张清晰、光照均匀、五官无遮挡的正面人脸照片。如果光照不均匀但五官特征依然清晰可辨，请将'goodLighting'设为true。请以JSON格式返回结果，包含布尔值字段: isFace, isClear, goodLighting, noObstruction, 以及一个中文的 reason 字符串说明不合格的主要原因。";
+
+                    const payload = {
+                        "contents": [{
+                            "parts": [
+                                { "text": prompt },
+                                { "inline_data": { "mime_type": "image/jpeg", "data": base64Data } }
+                            ]
+                        }],
+                        "generationConfig": { "response_mime_type": "application/json" }
+                    };
 
                     try {
-                        const apiKey = "AIzaSyCYTAXrqUBWjVSgQ9YyMGzhDbIGt4QHkg0"; // <-- 在这里粘贴您的API密钥
+                        const apiKey = "AIzaSyCYTAXrqUBWjVSgQ9YyMGzhDbIGt4QHkg0"; // <-- 在这里粘贴您的 Gemini API 密钥
                         if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY_HERE") {
                             throw new Error("请在代码中配置您的 Gemini API 密钥。");
                         }
                         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-                        const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+
+                        const response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
                         if (!response.ok) throw new Error(`AI服务器错误: ${response.statusText}`);
+
                         const result = await response.json();
                         const analysisJson = JSON.parse(result.candidates[0].content.parts[0].text);
 
@@ -305,44 +346,58 @@
             });
         }
 
+        // --- 摄像头和拍照逻辑 (包含所有优化) ---
         async function startCamera(video) {
             if (video.srcObject) return;
             try { video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false }); } catch (err) { alert("无法访问摄像头。"); }
         }
         function stopCamera(video) {
-            video.srcObject?.getTracks().forEach(t => t.stop());
+            if (!video.srcObject) return;
+            video.srcObject.getTracks().forEach(t => t.stop());
             video.srcObject = null;
         }
-
+        function applyZoom(module) {
+            const zoomLevel = module.zoomSlider.value;
+            module.video.style.transform = `scale(${zoomLevel})`;
+        }
         function resetCapture(module) {
             module.video.style.display = 'block';
             module.canvas.style.display = 'none';
-            module.button.textContent = `拍摄${module.video.id.includes('face') ? '面相' : '舌象'}`;
+            module.button.textContent = `拍摄`;
             module.button.classList.remove('bg-gray-500');
             module.button.classList.add(module.video.id.includes('face') ? 'bg-indigo-600' : 'bg-pink-600');
+            module.zoomSlider.value = 1;
+            applyZoom(module);
             if(module.resultEl) module.resultEl.textContent = '';
             module.blob = null;
             module.approved = false;
             checkIfReadyToSubmit();
         }
-
+        function captureImage(module) {
+            const { video, canvas, zoomSlider } = module;
+            const ctx = canvas.getContext('2d');
+            const zoom = parseFloat(zoomSlider.value);
+            const sourceWidth = video.videoWidth / zoom;
+            const sourceHeight = video.videoHeight / zoom;
+            const sx = (video.videoWidth - sourceWidth) / 2;
+            const sy = (video.videoHeight - sourceHeight) / 2;
+            canvas.width = sourceWidth;
+            canvas.height = sourceHeight;
+            ctx.drawImage(video, sx, sy, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
+            return new Promise(resolve => canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.9));
+        }
         async function handleCapture(imageType) {
             const module = cameraModules[imageType];
             if (module.button.textContent.includes('重新拍摄')) {
                 resetCapture(module);
                 return;
             }
-            const canvas = module.canvas;
-            const video = module.video;
-            const button = module.button;
-            const ctx = canvas.getContext('2d');
-            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            canvas.style.display = 'block'; video.style.display = 'none';
-            button.textContent = '重新拍摄';
-            button.classList.remove('bg-indigo-600', 'bg-pink-600'); button.classList.add('bg-gray-500');
-
-            const blob = await new Promise(resolve => canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.9));
+            module.video.style.display = 'none';
+            module.canvas.style.display = 'block';
+            module.button.textContent = '重新拍摄';
+            module.button.classList.remove('bg-indigo-600', 'bg-pink-600');
+            module.button.classList.add('bg-gray-500');
+            const blob = await captureImage(module);
             if (blob) {
                 const analysisResult = await analyzeImageWithAI(blob, imageType);
                 module.blob = analysisResult.success ? blob : null;
@@ -350,14 +405,22 @@
             }
             checkIfReadyToSubmit();
         }
-
         function checkIfReadyToSubmit() {
             submitBtn.disabled = !(cameraModules.face.approved && cameraModules.tongue.approved);
         }
+        const startCaptureUI = (imageType) => {
+            const module = cameraModules[imageType];
+            module.initialView.style.display = 'none';
+            module.captureArea.style.display = 'block';
+            startCamera(module.video);
+        };
+        Object.values(cameraModules).forEach(cam => {
+            cam.startBtn.addEventListener('click', () => startCaptureUI(cam.video.id.includes('face') ? 'face' : 'tongue'));
+            cam.button.addEventListener('click', () => handleCapture(cam.video.id.includes('face') ? 'face' : 'tongue'));
+            cam.zoomSlider.addEventListener('input', () => applyZoom(cam));
+        });
 
-        cameraModules.face.button.addEventListener('click', () => handleCapture('face'));
-        cameraModules.tongue.button.addEventListener('click', () => handleCapture('tongue'));
-
+        // --- 初始化检查 ---
         const token = localStorage.getItem('jwtToken');
         const username = localStorage.getItem('username');
         if (token && username) { setupSubmissionPage(username); }
